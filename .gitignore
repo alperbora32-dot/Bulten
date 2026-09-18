@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+
+# Büyük üretilmiş veri dosyaları (Actions önbelleğinde yaşar, repoya girmez)
+veri/kapanis_arsiv.json
+veri/kapanis_arsiv_buyuk.json
+veri/fd_cache/
+veri/tam_tarama.json
+veri/live_snapshot.json
+veri/kapanis_arsiv/
+
+# Çıktı klasörleri
+_site/
+paket/

@@ -1,0 +1,12 @@
+{
+ "uretim": "2026-09-18 12:04 UTC",
+ "mac_sayisi": 9880,
+ "ligler": {
+  "England · Premier League": 9880
+ },
+ "kaynaklar": [
+  "football-data.co.uk",
+  "github:AnishKhetani/premier-league-data"
+ ],
+ "format": "kapanis_arsiv uyumlu {u,l,t,e,d,ac,kp,hg,ag,ih,ia,ou}"
+}

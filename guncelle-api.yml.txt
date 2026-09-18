@@ -1,0 +1,103 @@
+name: Bulten guncelle
+
+# Bu iş akışı:
+#   1) Ücretsiz futbol API'lerinden günün verisini çeker       (api_cek.py)
+#   2) Oran arşivini kurar/güncelleştirir                      (oran_arsiv_cek.py)
+#      · football-data.co.uk (55+ lig, kapanış oranları)
+#      · GitHub EPL aynası (1993'ten beri açılış+kapanış)
+#      · mevcut kapanis_arsiv.json ile birleştirir
+#   3) Benzer oranlı maç kıyas sayfalarını üretir              (mac_kiyas.py)
+#   4) Küçük durum dosyalarını repoya commit eder, siteyi Pages'e yayınlar
+#
+# Gerekli ayar: Settings → Pages → Source: GitHub Actions
+#               Settings → Actions → General → Workflow permissions:
+#               "Read and write permissions" işaretli olmalı
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'   # her 30 dakikada bir
+  workflow_dispatch:          # elle de çalıştırılabilir
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: bulten-guncelle
+  cancel-in-progress: false
+
+jobs:
+  guncelle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Kodu indir
+        uses: actions/checkout@v4
+
+      - name: Python hazırla
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Veri önbelleğini geri yükle
+        uses: actions/cache@v4
+        with:
+          path: veri
+          key: veri-${{ github.run_id }}
+          restore-keys: veri-
+
+      - name: Paketi aç (paket/ klasörüne — veri/ klasörü korunur)
+        run: |
+          unzip -o -q bulten-paket.zip -d paket
+          mkdir -p veri
+          # paketin 161 binlik kapanış arşivini birleştirme için hazır tut
+          if [ -f paket/veri/kapanis_arsiv.json ] && [ ! -f veri/kapanis_arsiv.json ]; then
+            cp paket/veri/kapanis_arsiv.json veri/
+          fi
+
+      - name: Ücretsiz API'lerden günün verisini çek
+        run: python3 api_cek.py
+
+      - name: Oran arşivini kur / güncelle (son 12 sezon + EPL aynası)
+        run: python3 oran_arsiv_cek.py --sezon 12 --birlestir
+
+      - name: Benzer oranlı maç kıyasını üret
+        run: python3 mac_kiyas.py --bugun || true
+
+      - name: Site klasörünü hazırla
+        run: |
+          mkdir -p _site
+          cp ORAN_KIYAS.html API_DURUM.html _site/ 2>/dev/null || true
+          [ -f paket/BULTEN.html ]  && cp paket/BULTEN.html  _site/index.html   || true
+          [ -f paket/CANLI.html ]   && cp paket/CANLI.html   _site/canli.html   || true
+          [ -f paket/KURULUM.html ] && cp paket/KURULUM.html _site/kurulum.html || true
+
+      - name: Durumu repoya kaydet (yalnız küçük dosyalar)
+        run: |
+          git config user.name  "bulten-bot"
+          git config user.email "actions@github.com"
+          git add veri/api_durum.json veri/api_bugun.json \
+                 veri/oran_arsiv_meta.json veri/kiyas_bugun.json \
+                 ORAN_KIYAS.html API_DURUM.html 2>/dev/null || true
+          # 8 MB altındaki arşiv tohumunu da kaydet (büyükleri asla commit etme)
+          if [ -f veri/oran_arsiv.json ] && [ "$(stat -c%s veri/oran_arsiv.json)" -lt 8000000 ]; then
+            git add veri/oran_arsiv.json
+          fi
+          git diff --cached --quiet || (git commit -m "Otomatik güncelleme $(date -u +'%Y-%m-%d %H:%M') UTC" && git push)
+
+      - name: Site artefaktını hazırla
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  yayinla:
+    needs: guncelle
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: GitHub Pages'e yayınla
+        id: deployment
+        uses: actions/deploy-pages@v4

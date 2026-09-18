@@ -180,6 +180,30 @@ Yerel sunucu: `python3 -m http.server` → http://localhost:8000/ORAN_KIYAS.html
 
 ---
 
+## 6b) BULTEN_APP.html — tek dosyalık uygulama (kurulum YOK)
+
+`python3 bulten_app_uret.py` → **BULTEN_APP.html** (~4 MB).
+
+Dosyayı indirin, çift tıklayın. Python, sunucu, kurulum gerekmez.
+
+| Sekme | Ne yapar | İnternet |
+|---|---|---|
+| ⚽ Bugün | ESPN (lig seçimli, Süper Lig varsayılan) + 365Scores (oranlı, tüm gün) canlı fikstür — 60 sn otomatik yenileme | gerekli |
+| ⚖️ Oran Kıyası | **Gömülü 167 bin maçlık oran arşivi** ile benzer oranlı maç analizi — takım isimleri + lig filtresi + İY skorları | **gerekmez** |
+| 📊 Puan Durumu | ESPN canlı puan durumları (16 lig) | gerekli |
+
+Arşiv HTML içine 18 bayt/maç ikili formatta gömülür (oran×1000, skorlar, İY,
+tarih, lig, takım sözlükleri) — kıyas sekmesi tamamen çevrimdışı çalışır.
+Gömülü motor, `mac_kiyas.py` ile **birebir aynı sonuçları** verir
+(üç sorguda test edildi: 480/33/267 maç, dağılımlar aynı).
+
+Arşivi güncellemek için:
+```bash
+python3 oran_arsiv_cek.py --birlestir && python3 bulten_app_uret.py
+```
+
+---
+
 ## 7) İş akışı dosyası
 
 Arena ortamı `.github/workflows/` altına dosya gönderme yetkisine sahip olmadığından

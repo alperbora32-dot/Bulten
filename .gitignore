@@ -1,0 +1,8 @@
+# Çalışma sırasında üretilen büyük veri dosyaları (önbellekte tutulur, repoya girmez)
+veri/all_matches.json
+veri/kapanis_arsiv.json
+veri/tam_tarama.json
+veri/*.xlsx
+_site/
+__pycache__/
+*.pyc

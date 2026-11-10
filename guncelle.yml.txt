@@ -1,0 +1,136 @@
+name: Bulten guncelle
+
+# Her 30 dakikada bir çalışır + elle de başlatılabilir.
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'bulten-paket.zip'
+      - '.github/workflows/guncelle.yml'
+
+# Sayfayı yayınlamak ve küçük durum dosyasını commit etmek için gerekli izinler
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+# Aynı anda tek tur çalışsın (üst üste binmesin)
+concurrency:
+  group: bulten-guncelle
+  cancel-in-progress: false
+
+jobs:
+  guncelle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: 1) Depoyu al
+        uses: actions/checkout@v4
+
+      - name: 2) Python 3.12 kur
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # veri/ klasörünü turlar arasında taşı (arşivler yeniden çekilmesin).
+      # key her turda değişir; restore-keys sayesinde en son önbellek geri yüklenir.
+      - name: 3) Veri önbelleğini geri yükle
+        uses: actions/cache/restore@v4
+        with:
+          path: veri
+          key: veri-${{ github.run_id }}
+          restore-keys: |
+            veri-
+
+      - name: 4) Paketi aç ve yolları uyarla
+        run: |
+          set -e
+          test -f bulten-paket.zip || { echo "bulten-paket.zip yok!"; exit 1; }
+          if [ -f veri/all_matches.json ]; then
+            # önbellekten gelen güncel veri korunur, paketteki eski veri yazılmaz
+            echo "önbellek verisi var → paket veri/ hariç açılıyor"
+            unzip -o -q bulten-paket.zip -x 'veri/*'
+          else
+            echo "ilk tur → paket olduğu gibi açılıyor"
+            unzip -o -q bulten-paket.zip
+          fi
+          # betiklerdeki sabit /home/user yolunu bu klasöre çevir
+          find . -maxdepth 1 -name '*.py' -exec sed -i "s|/home/user|$PWD|g" {} +
+          echo "PWD=$PWD"
+          python3 -V
+
+      - name: 5) Gerekli paketler
+        run: |
+          python3 -m pip install --quiet --upgrade pip
+          python3 -m pip install --quiet numpy openpyxl
+
+      - name: 6) Arşivi büyüt (kaldığı yerden, 5 dk)
+        continue-on-error: true
+        timeout-minutes: 8
+        run: python3 -u arsiv_genislet.py 300
+
+      - name: 7) Güncel sezon sonuçları (4 dk)
+        continue-on-error: true
+        timeout-minutes: 7
+        run: python3 -u guncele.py 240
+
+      - name: 8) Fikstür + oranları tazele
+        continue-on-error: true
+        timeout-minutes: 6
+        run: python3 -u veri_temizle.py
+
+      - name: 9) Oran hareketi (açılış → şimdi)
+        continue-on-error: true
+        timeout-minutes: 6
+        run: python3 -u oran_hareket.py devam
+
+      - name: 10) Oynanmış maçların kapanış oranı + CLV
+        continue-on-error: true
+        timeout-minutes: 6
+        run: python3 -u kapanis_topla.py
+
+      - name: 11) İlk yarı verisi (eksikler)
+        continue-on-error: true
+        timeout-minutes: 5
+        run: python3 -u ht_topla.py 8
+
+      - name: 12) Bülteni üret
+        timeout-minutes: 8
+        run: python3 -u bulten_v3.py
+
+      - name: 13) Statik siteyi hazırla (_site)
+        timeout-minutes: 10
+        run: python3 -u site_uret.py
+
+      - name: 14) Durumu repoya kaydet
+        continue-on-error: true
+        run: |
+          mkdir -p veri
+          python3 -c "import json,datetime;from zoneinfo import ZoneInfo;json.dump({'zaman':datetime.datetime.now(ZoneInfo('Europe/Istanbul')).strftime('%d.%m.%Y %H:%M'),'tetik':'github-actions'},open('veri/son_calisma.json','w',encoding='utf-8'),ensure_ascii=False)"
+          git config user.name  "bulten-bot"
+          git config user.email "bulten-bot@users.noreply.github.com"
+          git add -f veri/son_calisma.json
+          git commit -m "otomatik: $(date -u '+%Y-%m-%d %H:%M UTC')" || echo "değişiklik yok"
+          git push
+
+      - name: 15) Sayfayı yayına hazırla
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: 16) GitHub Pages'e yayınla
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: 17) Güncel veriyi önbelleğe yaz
+        uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: veri
+          key: veri-${{ github.run_id }}

@@ -45,7 +45,6 @@ jobs:
         with:
           path: veri
           key: veri-${{ github.run_id }}
-          key: veri-${{ github.run_id }}
           restore-keys: |
             veri-
 
@@ -113,13 +112,7 @@ jobs:
         continue-on-error: true
         run: |
           mkdir -p veri
-          python3 - <<'PY'
-          import json, datetime
-          from zoneinfo import ZoneInfo
-          d = {"zaman": datetime.datetime.now(ZoneInfo("Europe/Istanbul")).strftime("%d.%m.%Y %H:%M"),
-               "tetik": "github-actions"}
-          json.dump(d, open("veri/son_calisma.json", "w", encoding="utf-8"), ensure_ascii=False)
-          PY
+          python3 -c "import json,datetime;from zoneinfo import ZoneInfo;json.dump({'zaman':datetime.datetime.now(ZoneInfo('Europe/Istanbul')).strftime('%d.%m.%Y %H:%M'),'tetik':'github-actions'},open('veri/son_calisma.json','w',encoding='utf-8'),ensure_ascii=False)"
           git config user.name  "bulten-bot"
           git config user.email "bulten-bot@users.noreply.github.com"
           git add -f veri/son_calisma.json
